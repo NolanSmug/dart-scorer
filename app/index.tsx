@@ -1,19 +1,17 @@
-import { StyleSheet } from "react-native"
-import { DartBoard } from "@/components/ui/DartBoard"
-import { ThemedView } from "@/components/ThemedView"
+import { ScoreProvider } from "@/contexts/ScoreContext"
+import { useFonts } from "expo-font"
+import App from "./App"
 
-export default function HomeScreen() {
+export default function index() {
+    const [fontsLoaded] = useFonts({
+        "CourierPrime-Regular": require("../assets/fonts/CourierPrime-Regular.ttf"),
+    })
+
+    if (!fontsLoaded) return null
+
     return (
-        <ThemedView style={styles.appContainer}>
-            <DartBoard />
-        </ThemedView>
+        <ScoreProvider>
+            <App />
+        </ScoreProvider>
     )
 }
-
-const styles = StyleSheet.create({
-    appContainer: {
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-    },
-})

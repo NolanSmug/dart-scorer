@@ -1,9 +1,11 @@
+import { useScoreContext } from "@/contexts/ScoreContext"
+import { GameState } from "@/logic/GameState"
 import React from "react"
 
-import { StyleSheet } from "react-native"
-import Svg, { Circle, Defs, Path, Text, TextPath } from "react-native-svg"
+import { Button, Text as FontText, StyleSheet } from "react-native"
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler"
-import Animated, { useSharedValue, useAnimatedStyle } from "react-native-reanimated"
+import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated"
+import Svg, { Circle, Path, Text } from "react-native-svg"
 
 export type Slice = {
     percentage: number
@@ -12,11 +14,15 @@ export type Slice = {
 }
 
 export enum MultiplierRing {
+    MISS,
     DOUBLE,
     TRIPLE,
 }
 
 export const DartBoard = () => {
+    const { gameState, setGameState } = useScoreContext()
+    const [isGameOver, setGameOver] = React.useState(false)
+
     const DART_BOARD_VALUES: number[] = [6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5, 20, 1, 18, 4, 13]
     let slices: Slice[] = []
     for (let i = 0; i < 20; i++) {
@@ -25,6 +31,26 @@ export const DartBoard = () => {
         } else {
             slices.push({ percentage: 0.05, color: "black", value: DART_BOARD_VALUES[i] })
         }
+    }
+
+    function undoLastThrow() {
+        gameState.undo()
+        setGameState(new GameState(gameState.getPlayers(), gameState.getCurrentPlayerIndex()))
+    }
+
+    function updateScore(value: number, multiplier?: MultiplierRing) {
+        gameState.scoreCurrentPlayer(value, multiplier)
+        setGameState(new GameState(gameState.getPlayers(), gameState.getCurrentPlayerIndex()))
+
+        if (gameState.getGameOver()) {
+            setGameOver(true)
+        }
+    }
+
+    function resetGame() {
+        gameState.resetGame()
+        setGameState(new GameState(gameState.getPlayers(), gameState.getCurrentPlayerIndex()))
+        setGameOver(false)
     }
 
     const drawSlice = (slice: Slice, index: number) => {
@@ -39,29 +65,42 @@ export const DartBoard = () => {
         const endX = Math.cos(endAngle)
         const endY = Math.sin(endAngle)
 
-        const labelX = Math.cos(midAngle) * 1.125
-        const labelY = Math.sin(midAngle) * 1.125
+        const labelX = Math.cos(midAngle) * 1.05
+        const labelY = Math.sin(midAngle) * 1.05
+
+        const labelAngle = (midAngle * 180) / Math.PI + 90
 
         return (
             <React.Fragment key={index}>
-                <Path d={`M ${startX} ${startY} A 1 1 0 0 1 ${endX} ${endY} L 0 0 Z`} fill={slice.color} />
-                <Path d={drawMultiplierRing(MultiplierRing.DOUBLE, startAngle, endAngle)} fill={index % 2 === 0 ? "green" : "red"} />
-                <Path d={drawMultiplierRing(MultiplierRing.TRIPLE, startAngle, endAngle)} fill={index % 2 === 0 ? "green" : "red"} />
-                <Defs>
-                    <Path
-                        id={`arc-label-${index}`}
-                        d={`M ${startX * 0.85} ${startY * 0.85} A 0.85 0.85 0 0 1 ${endX * 0.85} ${endY * 0.85}`}
-                    />
-                </Defs>
+                <Path
+                    d={`M ${startX} ${startY} A 1 1 0 0 1 ${endX} ${endY} L 0 0 Z`}
+                    fill={slice.color}
+                    onPress={() => updateScore(slice.value)}
+                />
+                <Path
+                    d={drawMultiplierRing(MultiplierRing.DOUBLE, startAngle, endAngle)}
+                    fill={index % 2 === 0 ? "green" : "red"}
+                    stroke={"darkgrey"}
+                    strokeWidth={0.005}
+                    onPress={() => updateScore(slice.value * 2, MultiplierRing.DOUBLE)}
+                />
+                <Path
+                    d={drawMultiplierRing(MultiplierRing.TRIPLE, startAngle, endAngle)}
+                    fill={index % 2 === 0 ? "green" : "red"}
+                    stroke={"darkgrey"}
+                    strokeWidth={0.005}
+                    onPress={() => updateScore(slice.value * 3, MultiplierRing.TRIPLE)}
+                />
                 <Text
                     x={labelX}
                     y={labelY}
                     fill="white"
-                    fontSize={0.15}
+                    fontSize={0.18}
                     textAnchor="middle"
                     alignmentBaseline="middle"
-                    transform={`rotate(0 ${labelX} ${labelY})`}
-                    fontWeight={300}
+                    transform={`rotate(${labelAngle} ${labelX} ${labelY})`}
+                    fontWeight={400}
+                    fontFamily={"CourierPrime-Regular"}
                 >
                     {slice.value}
                 </Text>
@@ -90,7 +129,6 @@ export const DartBoard = () => {
             Z`
     }
 
-    /* Gesture logic */
     const translateX = useSharedValue(0)
     const translateY = useSharedValue(0)
     const savedTranslateX = useSharedValue(0)
@@ -98,7 +136,7 @@ export const DartBoard = () => {
 
     const MAX_PAN = 400
     const MIN_ZOOM_SCALE = 1
-    const MAX_ZOOM_SCALE = 3
+    const MAX_ZOOM_SCALE = 5
 
     const scale = useSharedValue(1)
     const savedScale = useSharedValue(1)
@@ -140,20 +178,47 @@ export const DartBoard = () => {
         transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { scale: scale.value }],
     }))
 
+    if (isGameOver) {
+        return (
+            <div style={styles.gameOver}>
+                <FontText style={{ fontFamily: "CourierPrime-Regular", fontSize: 28, color: "white" }}>
+                    {gameState.getCurrentPlayer().getName()} wins!
+                </FontText>
+                <Button onPress={() => resetGame()} title="New Game" />
+            </div>
+        )
+    }
+
     return (
         <GestureHandlerRootView>
             <GestureDetector gesture={composedGesture}>
                 <Animated.View style={[styles.svgWrapper, animatedStyle]} collapsable={false}>
                     <Svg viewBox="-1.685 -1.685 3.37 3.37" preserveAspectRatio="xMidYMid" height={400} width={400}>
-                        <Circle cx={0} cy={0} r={1.33} fill="none" stroke="darkblue" strokeWidth={0.67} />
+                        <Circle cx={0} cy={0} r={1.33} fill="none" stroke="darkblue" strokeWidth={0.67} onPress={() => updateScore(0)} />
                         <Text x={0} y={-1.45} fontSize={0.2} fill="white" textAnchor="middle" alignmentBaseline="middle">
                             WINMAU
                         </Text>
-
-                        <Circle cx={0} cy={0} r={1.01} fill="none" stroke="black" strokeWidth={0.67} />
+                        <Circle cx={0} cy={0} r={1.01} fill="none" stroke="black" strokeWidth={0.67} onPress={() => updateScore(0)} />
                         {slices.map((slice, index) => drawSlice(slice, index))}
-                        <Circle cx={0} cy={0} r={0.1} fill="red" stroke="green" strokeWidth={0.075} />
+                        <Circle cx={0} cy={0} r={0.16} fill="green" stroke="darkgrey" strokeWidth={0.005} onPress={() => updateScore(25)} />
+                        <Circle
+                            cx={0}
+                            cy={0}
+                            r={0.08}
+                            fill="red"
+                            stroke="darkgrey"
+                            strokeWidth={0.005}
+                            onPress={() => updateScore(50, MultiplierRing.DOUBLE)}
+                        />
                     </Svg>
+                    <Button onPress={() => undoLastThrow()} title={"Undo"}></Button>
+                    <Button
+                        onPress={() => {
+                            gameState.resetGame()
+                            setGameState(new GameState(gameState.getPlayers(), gameState.getCurrentPlayerIndex()))
+                        }}
+                        title={"Reset"}
+                    ></Button>
                 </Animated.View>
             </GestureDetector>
         </GestureHandlerRootView>
@@ -172,5 +237,11 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: "center",
         alignSelf: "center",
+    },
+    gameOver: {
+        display: "flex",
+        flexDirection: "column",
+        padding: 40,
+        alignItems: "center",
     },
 })
