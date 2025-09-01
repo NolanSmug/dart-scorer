@@ -1,4 +1,4 @@
-import { MultiplierRing } from "@/components/ui/DartBoard"
+import { MultiplierRing } from "./dartEnums"
 import { Player } from "./Player"
 
 export class GameState {

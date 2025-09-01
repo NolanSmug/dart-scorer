@@ -1,7 +1,9 @@
 import { useScoreContext } from "@/contexts/ScoreContext"
+import { MultiplierRing } from "@/logic/dartEnums"
 import { GameState } from "@/logic/GameState"
-import React from "react"
+import React, { useState } from "react"
 
+import * as Haptics from "expo-haptics"
 import { Button, Text as FontText, StyleSheet } from "react-native"
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler"
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated"
@@ -13,15 +15,9 @@ export type Slice = {
     value: number
 }
 
-export enum MultiplierRing {
-    MISS,
-    DOUBLE,
-    TRIPLE,
-}
-
 export const DartBoard = () => {
     const { gameState, setGameState } = useScoreContext()
-    const [isGameOver, setGameOver] = React.useState(false)
+    const [isGameOver, setGameOver] = useState<boolean>(false)
 
     const DART_BOARD_VALUES: number[] = [6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5, 20, 1, 18, 4, 13]
     let slices: Slice[] = []
@@ -39,11 +35,29 @@ export const DartBoard = () => {
     }
 
     function updateScore(value: number, multiplier?: MultiplierRing) {
+        playHaptic(multiplier)
         gameState.scoreCurrentPlayer(value, multiplier)
         setGameState(new GameState(gameState.getPlayers(), gameState.getCurrentPlayerIndex()))
 
         if (gameState.getGameOver()) {
             setGameOver(true)
+        }
+    }
+
+    function playHaptic(multiplier?: MultiplierRing) {
+        switch (multiplier) {
+            case MultiplierRing.MISS:
+                // no haptic for miss (give them a dopamine loss)
+                break
+            case MultiplierRing.DOUBLE:
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+                break
+            case MultiplierRing.TRIPLE:
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)
+                break
+            default:
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft)
+                break
         }
     }
 
@@ -149,9 +163,7 @@ export const DartBoard = () => {
         })
         .onEnd(() => {
             savedScale.value = scale.value
-
             if (Math.abs(scale.value - 1) < 0.01) {
-                // Snap back to center if zoomed out fully
                 translateX.value = 0
                 translateY.value = 0
                 savedTranslateX.value = 0
@@ -194,13 +206,63 @@ export const DartBoard = () => {
             <GestureDetector gesture={composedGesture}>
                 <Animated.View style={[styles.svgWrapper, animatedStyle]} collapsable={false}>
                     <Svg viewBox="-1.685 -1.685 3.37 3.37" preserveAspectRatio="xMidYMid" height={400} width={400}>
-                        <Circle cx={0} cy={0} r={1.33} fill="none" stroke="darkblue" strokeWidth={0.67} onPress={() => updateScore(0)} />
-                        <Text x={0} y={-1.45} fontSize={0.2} fill="white" textAnchor="middle" alignmentBaseline="middle">
-                            WINMAU
-                        </Text>
-                        <Circle cx={0} cy={0} r={1.01} fill="none" stroke="black" strokeWidth={0.67} onPress={() => updateScore(0)} />
+                        <Circle
+                            cx={0}
+                            cy={0}
+                            r={1.33}
+                            fill="none"
+                            stroke="darkblue"
+                            strokeWidth={0.67}
+                            onPress={() => updateScore(0, MultiplierRing.MISS)}
+                        />
+                        {"W   I  N    M    A   U".split("").map((char, i, arr) => {
+                            const totalAngle = 33
+                            const startAngle = -totalAngle / 2
+                            const angle = startAngle + (i * totalAngle) / (arr.length - 1)
+
+                            const radius = 1.5
+                            const rad = (angle * Math.PI) / 180
+
+                            const x = radius * Math.sin(rad) * 0.9
+                            const y = -radius * Math.cos(rad)
+
+                            return (
+                                <Text
+                                    key={i}
+                                    x={x}
+                                    y={y}
+                                    fontSize={0.2}
+                                    fontFamily={"BarBenderbold"}
+                                    fill="white"
+                                    textAnchor="middle"
+                                    alignmentBaseline="middle"
+                                    rotation={angle}
+                                    origin={`${x}, ${y}`}
+                                >
+                                    {char}
+                                </Text>
+                            )
+                            // don't ask how much work this took :/
+                        })}
+                        <Circle
+                            cx={0}
+                            cy={0}
+                            r={1.01}
+                            fill="none"
+                            stroke="black"
+                            strokeWidth={0.67}
+                            onPressOut={() => updateScore(0, MultiplierRing.MISS)}
+                        />
                         {slices.map((slice, index) => drawSlice(slice, index))}
-                        <Circle cx={0} cy={0} r={0.16} fill="green" stroke="darkgrey" strokeWidth={0.005} onPress={() => updateScore(25)} />
+                        <Circle
+                            cx={0}
+                            cy={0}
+                            r={0.16}
+                            fill="green"
+                            stroke="darkgrey"
+                            strokeWidth={0.005}
+                            onPressOut={() => updateScore(25)}
+                        />
                         <Circle
                             cx={0}
                             cy={0}
@@ -208,9 +270,10 @@ export const DartBoard = () => {
                             fill="red"
                             stroke="darkgrey"
                             strokeWidth={0.005}
-                            onPress={() => updateScore(50, MultiplierRing.DOUBLE)}
+                            onPressOut={() => updateScore(50, MultiplierRing.DOUBLE)}
                         />
                     </Svg>
+
                     <Button onPress={() => undoLastThrow()} title={"Undo"}></Button>
                     <Button
                         onPress={() => {

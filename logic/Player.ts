@@ -1,4 +1,4 @@
-import { MultiplierRing } from "@/components/ui/DartBoard"
+import { MultiplierRing } from "./dartEnums"
 
 export class Player {
     private name: string
@@ -46,8 +46,10 @@ export class Player {
         }
         if (this.score - dartScore <= 1) {
             // bust
-            this.dartsLeft--
-            this.scoresHistory.push(0)
+            const turnDartsThrown = 3 - this.dartsLeft
+            const turnScores = this.scoresHistory.slice(this.scoresHistory.length - turnDartsThrown)
+            this.score += turnScores.reduce((a, b) => a + b, 0)
+            this.dartsLeft = 0
             this.dartsLeft = 0
             return
         }
