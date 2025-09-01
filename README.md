@@ -1,7 +1,7 @@
 # Dart Scorer
 
-<img src="./assets/images/game-screenshot.jpg" width="220">
-<img src="./assets/images/game-screenshot2.jpeg" width="220">
+| ![game-screenshot-1](assets/images/game-screenshot.jpg) | ![game-screenshot-2](assets/images/game-screenshot2.jpeg) |
+| --- | --- |
 
 ## Description
 
